@@ -1,19 +1,405 @@
-Waterbomb 2026 — 계약서 자동화
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Waterbomb 2026 — 계약서 자동화</title>
+<script src="https://unpkg.com/pizzip@3.1.6/dist/pizzip.js"></script>
+<script src="https://unpkg.com/docxtemplater@3.49.0/build/docxtemplater.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f5f3; --surface: #ffffff; --border: #e0e0da; --border-focus: #aaa;
+    --text: #1a1a1a; --text-muted: #888; --text-hint: #bbb;
+    --blue-bg: #eef4ff; --blue-text: #2d5fd4; --blue-border: #b3caf5;
+    --amber-bg: #fff8eb; --amber-text: #b06a00; --amber-border: #f5d48a;
+    --purple-bg: #f5eeff; --purple-text: #6d28d9; --purple-border: #c4b5fd;
+    --green-bg: #edfaf3; --green-text: #1a7a45; --green-border: #a3dfc0;
+    --red-bg: #fff0f0; --red-text: #c0392b; --red-border: #f5b0b0;
+    --radius: 10px; --radius-sm: 6px;
+  }
+  body { background: var(--bg); font-family: -apple-system, "Apple SD Gothic Neo", BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--text); min-height: 100vh; padding: 2rem 1rem; }
+  .wrap { max-width: 740px; margin: 0 auto; }
+  header { margin-bottom: 2rem; }
+  header h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+  header p { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+  .section { margin-bottom: 1.5rem; }
+  .section-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; }
+  .tpl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tpl-item { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .tpl-left { display: flex; align-items: center; gap: 7px; min-width: 0; flex: 1; overflow: hidden; }
+  .tpl-tags { display: flex; gap: 4px; flex-shrink: 0; }
+  .tag { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 20px; border: 1px solid; white-space: nowrap; }
+  .tag-seoul { background: var(--blue-bg); color: var(--blue-text); border-color: var(--blue-border); }
+  .tag-busan { background: var(--amber-bg); color: var(--amber-text); border-color: var(--amber-border); }
+  .tag-artist { background: var(--green-bg); color: var(--green-text); border-color: var(--green-border); }
+  .tag-dj { background: var(--purple-bg); color: var(--purple-text); border-color: var(--purple-border); }
+  .tag-indiv { background: #fff3e0; color: #e65100; border-color: #ffcc80; }
+  .tag-corp { background: #f0f0f0; color: #555; border-color: #ddd; }
+  .tpl-name { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tpl-name.set { color: var(--green-text); font-weight: 500; }
+  .tpl-item input[type=file] { display: none; }
+  .btn { font-size: 12px; font-weight: 500; padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); cursor: pointer; transition: background 0.15s; white-space: nowrap; flex-shrink: 0; }
+  .btn:hover { background: var(--bg); }
+  .btn:active { transform: scale(0.98); }
+  .btn-primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; font-size: 14px; padding: 10px 24px; }
+  .btn-primary:hover { background: #333; }
+  .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+  .tpl-hint { font-size: 11px; color: var(--text-hint); margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .add-row { display: flex; gap: 6px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  .add-row input, .add-row select { font-size: 13px; padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); }
+  .add-row input:focus, .add-row select:focus { outline: none; border-color: var(--border-focus); }
+  .inp-name { width: 100px; } .inp-date { width: 110px; } .inp-fee { width: 130px; } .inp-city { width: 80px; } .inp-type { width: 120px; }
+  .artist-list { display: flex; flex-direction: column; gap: 10px; }
+  .artist-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; }
+  .ac-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--blue-bg); color: var(--blue-text); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+  .ac-info { flex: 1; }
+  .ac-name { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  .ac-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .del-btn { font-size: 12px; color: var(--text-hint); background: none; border: none; cursor: pointer; padding: 4px; }
+  .del-btn:hover { color: var(--red-text); }
+  .file-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .fslot input[type=file] { display: none; }
+  .fslot label { display: flex; align-items: center; gap: 5px; font-size: 11px; padding: 7px 10px; border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--text-muted); cursor: pointer; transition: all 0.15s; overflow: hidden; white-space: nowrap; }
+  .fslot label:hover { border-color: var(--border-focus); color: var(--text); }
+  .fslot label.ok { border-style: solid; color: var(--green-text); border-color: var(--green-border); background: var(--green-bg); }
+  .bottom { display: flex; align-items: center; justify-content: space-between; margin-top: 1.5rem; }
+  .today-hint { font-size: 12px; color: var(--text-hint); }
+  .status-box { margin-top: 1rem; padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; display: none; }
+  .status-box.info { background: var(--blue-bg); color: var(--blue-text); border: 1px solid var(--blue-border); display: block; }
+  .status-box.success { background: var(--green-bg); color: var(--green-text); border: 1px solid var(--green-border); display: block; }
+  .status-box.error { background: var(--red-bg); color: var(--red-text); border: 1px solid var(--red-border); display: block; }
+  .prog-list { margin-top: 12px; display: none; flex-direction: column; gap: 6px; }
+  .prog-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); padding: 2px 0; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+  .prog-item.active { color: var(--blue-text); } .prog-item.active .dot { background: var(--blue-text); animation: pulse 1s infinite; }
+  .prog-item.done { color: var(--text); } .prog-item.done .dot { background: var(--green-text); }
+  .prog-item.error { color: var(--red-text); } .prog-item.error .dot { background: var(--red-text); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .empty { text-align: center; padding: 2rem; color: var(--text-hint); font-size: 13px; border: 1px dashed var(--border); border-radius: var(--radius-sm); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>⚡ Waterbomb 2026 계약서 자동화</h1>
+    <p>아티스트 정보와 서류를 입력하면 계약서 docx를 자동으로 완성해드립니다</p>
+  </header>
+  <div class="section">
+    <div class="section-label">계약서 초안 (6종)</div>
+    <div class="card">
+      <div class="tpl-grid" id="tpl-grid"></div>
+      <div class="tpl-hint">💡 초안이 서버에서 자동으로 불러와집니다. 파일이 없을 경우 직접 선택하세요.</div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-label">아티스트 목록</div>
+    <div class="card">
+      <div class="artist-list" id="artist-list">
+        <div class="empty" id="empty-state">아래에서 아티스트를 추가해주세요</div>
+      </div>
+      <div class="add-row">
+        <input class="inp-name" type="text" id="inp-name" placeholder="아티스트명" />
+        <input class="inp-date" type="text" id="inp-date" placeholder="출연일정 (예: 7/25(토))" />
+        <input class="inp-fee"  type="text" id="inp-fee"  placeholder="개런티 (예: 30000000)" />
+        <select class="inp-city" id="inp-city"><option value="서울">서울</option><option value="부산">부산</option></select>
+        <select class="inp-type" id="inp-type">
+          <option value="artist">LIVE 아티스트</option>
+          <option value="dj_corp">DJ (법인)</option>
+          <option value="dj_indiv">DJ (개인)</option>
+        </select>
+        <button class="btn" onclick="addArtist()">+ 추가</button>
+      </div>
+    </div>
+  </div>
+  <div class="bottom">
+    <span class="today-hint">계약일: <span id="today-str"></span> 자동입력</span>
+    <button class="btn btn-primary" id="gen-btn" onclick="generate()" disabled>계약서 일괄 생성</button>
+  </div>
+  <div class="status-box" id="status-box"></div>
+  <div class="prog-list" id="prog-list"></div>
+</div>
+<script>
+const TPL_DEFS = [
+  {key:'seoul_artist',  city:'서울', type:'artist',   cityTag:'tag-seoul', typeTag:'tag-artist', typeLabel:'LIVE'},
+  {key:'seoul_dj_corp', city:'서울', type:'dj_corp',  cityTag:'tag-seoul', typeTag:'tag-dj',     typeLabel:'DJ 법인'},
+  {key:'seoul_dj_indiv',city:'서울', type:'dj_indiv', cityTag:'tag-seoul', typeTag:'tag-dj',     typeLabel:'DJ 개인'},
+  {key:'busan_artist',  city:'부산', type:'artist',   cityTag:'tag-busan', typeTag:'tag-artist', typeLabel:'LIVE'},
+  {key:'busan_dj_corp', city:'부산', type:'dj_corp',  cityTag:'tag-busan', typeTag:'tag-dj',     typeLabel:'DJ 법인'},
+  {key:'busan_dj_indiv',city:'부산', type:'dj_indiv', cityTag:'tag-busan', typeTag:'tag-dj',     typeLabel:'DJ 개인'},
+];
+const state = { artists: [], templates: {} };
+let artistId = 0;
+const today = new Date();
+document.getElementById('today-str').textContent = `${today.getFullYear()}년 ${today.getMonth()+1}월 ${today.getDate()}일`;
 
-⚡ Waterbomb 2026 계약서 자동화
-아티스트 정보와 서류를 입력하면 계약서 docx를 자동으로 완성해드립니다
-계약서 초안 (6종)
-💡 초안이 서버에서 자동으로 불러와집니다. 파일이 없을 경우 직접 선택하세요.
-아티스트 목록
-아래에서 아티스트를 추가해주세요
+function renderTemplates() {
+  document.getElementById('tpl-grid').innerHTML = TPL_DEFS.map(d => `
+    <div class="tpl-item">
+      <div class="tpl-left">
+        <div class="tpl-tags"><span class="tag ${d.cityTag}">${d.city}</span><span class="tag ${d.typeTag}">${d.typeLabel}</span></div>
+        <span class="tpl-name" id="tpl-name-${d.key}">미업로드</span>
+      </div>
+      <input type="file" id="tpl-${d.key}" accept=".docx" onchange="handleTpl('${d.key}',this)">
+      <label for="tpl-${d.key}" class="btn">선택</label>
+    </div>`).join('');
+}
+renderTemplates();
 
+// 서버에서 초안 자동 로드
+async function autoLoadTemplates() {
+  const TPL_FILES = [
+    { key: 'seoul_artist',   file: 'seoul_artist.docx' },
+    { key: 'seoul_dj_corp',  file: 'seoul_dj_corp.docx' },
+    { key: 'seoul_dj_indiv', file: 'seoul_dj_indiv.docx' },
+    { key: 'busan_artist',   file: 'busan_artist.docx' },
+    { key: 'busan_dj_corp',  file: 'busan_dj_corp.docx' },
+    { key: 'busan_dj_indiv', file: 'busan_dj_indiv.docx' },
+  ];
+  let loadedCount = 0;
+  await Promise.all(TPL_FILES.map(async ({ key, file }) => {
+    try {
+      const res = await fetch('/templates/' + file);
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const f = new File([blob], file, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      state.templates[key] = f;
+      const el = document.getElementById('tpl-name-' + key);
+      if (el) { el.textContent = '✓ 자동 로드됨'; el.classList.add('set'); }
+      loadedCount++;
+    } catch(e) {}
+  }));
+  if (loadedCount > 0) checkReady();
+}
+autoLoadTemplates();
 
+function handleTpl(key, input) {
+  if (!input.files[0]) return;
+  state.templates[key] = input.files[0];
+  const el = document.getElementById('tpl-name-'+key);
+  const n = input.files[0].name;
+  el.textContent = n.length > 18 ? n.slice(0,16)+'…' : n;
+  el.classList.add('set');
+  checkReady();
+}
 
-서울부산
-          LIVE 아티스트
-          DJ (법인)
-          DJ (개인)
-        
-+ 추가
-계약일: 자동입력
-계약서 일괄 생성
+function tplKey(city, type) {
+  return (city==='서울'?'seoul':'busan') + '_' + type;
+}
+
+function typeLabel(type) {
+  return type==='artist'?'LIVE': type==='dj_corp'?'DJ 법인':'DJ 개인';
+}
+
+function addArtist() {
+  const name = document.getElementById('inp-name').value.trim();
+  const date = document.getElementById('inp-date').value.trim();
+  const fee  = document.getElementById('inp-fee').value.trim();
+  const city = document.getElementById('inp-city').value;
+  const type = document.getElementById('inp-type').value;
+  if (!name||!date||!fee){alert('아티스트명, 출연일정, 개런티를 모두 입력해주세요');return;}
+  state.artists.push({id:artistId++,name,date,fee,city,type,doc1:null,doc2:null});
+  document.getElementById('inp-name').value='';
+  document.getElementById('inp-date').value='';
+  document.getElementById('inp-fee').value='';
+  renderArtists(); checkReady();
+}
+
+function removeArtist(id) {
+  state.artists=state.artists.filter(a=>a.id!==id);
+  renderArtists(); checkReady();
+}
+
+function handleFile(id, slot, input) {
+  if (!input.files[0]) return;
+  const a = state.artists.find(x=>x.id===id);
+  const f = input.files[0];
+  const short = f.name.length>16?f.name.slice(0,14)+'…':f.name;
+  if (slot==='doc1') { a.doc1=f; document.getElementById('doc1-lbl-'+id).classList.add('ok'); document.getElementById('doc1-lbl-'+id).querySelector('span').textContent=short; }
+  else { a.doc2=f; document.getElementById('doc2-lbl-'+id).classList.add('ok'); document.getElementById('doc2-lbl-'+id).querySelector('span').textContent=short; }
+  checkReady();
+}
+
+function renderArtists() {
+  const list = document.getElementById('artist-list');
+  document.getElementById('empty-state').style.display = state.artists.length?'none':'block';
+  list.querySelectorAll('.artist-card').forEach(c=>c.remove());
+  state.artists.forEach(a => {
+    const feeNum = Number(String(a.fee).replace(/[^0-9]/g,''));
+    const feeStr = feeNum?feeNum.toLocaleString()+'원':a.fee;
+    const isIndiv = a.type==='dj_indiv';
+    const doc1Lbl = isIndiv?'🪪 신분증':'📄 사업자등록증';
+    const cityClass = a.city==='서울'?'tag-seoul':'tag-busan';
+    const typeClass = a.type==='artist'?'tag-artist':'tag-dj';
+    const subTag = a.type==='artist'?'': a.type==='dj_corp'?'<span class="tag tag-corp">법인</span>':'<span class="tag tag-indiv">개인</span>';
+    const div = document.createElement('div');
+    div.className='artist-card';
+    div.innerHTML=`
+      <div class="ac-head">
+        <div class="avatar">${a.name.slice(0,2)}</div>
+        <div class="ac-info">
+          <div class="ac-name">${a.name}<span class="tag ${cityClass}">${a.city}</span><span class="tag ${typeClass}">${typeLabel(a.type)}</span>${subTag}</div>
+          <div class="ac-meta">${a.date} · ${feeStr}</div>
+        </div>
+        <button class="del-btn" onclick="removeArtist(${a.id})">✕</button>
+      </div>
+      <div class="file-grid">
+        <div class="fslot"><input type="file" id="doc1-${a.id}" accept="image/*,.pdf" onchange="handleFile(${a.id},'doc1',this)"><label for="doc1-${a.id}" id="doc1-lbl-${a.id}">${doc1Lbl} <span></span></label></div>
+        <div class="fslot"><input type="file" id="doc2-${a.id}" accept="image/*,.pdf" onchange="handleFile(${a.id},'doc2',this)"><label for="doc2-${a.id}" id="doc2-lbl-${a.id}">💳 통장사본 <span></span></label></div>
+      </div>`;
+    list.appendChild(div);
+  });
+}
+
+function checkReady() {
+  const keysNeeded = [...new Set(state.artists.map(a=>tplKey(a.city,a.type)))];
+  const tplOk = keysNeeded.every(k=>state.templates[k]);
+  const filesOk = state.artists.length>0 && state.artists.every(a=>a.doc1&&a.doc2);
+  document.getElementById('gen-btn').disabled = !(tplOk&&filesOk);
+}
+
+function showStatus(msg,type){const el=document.getElementById('status-box');el.className='status-box '+type;el.textContent=msg;}
+function setProgStatus(id,status,label){const el=document.getElementById('prog-'+id);if(el){el.className='prog-item '+status;el.querySelector('span').textContent=label;}}
+
+function toBase64(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});}
+function resizeAndBase64(file){return new Promise(function(res,rej){if(file.type==='application/pdf'){toBase64(file).then(res).catch(rej);return;}var reader=new FileReader();reader.onload=function(e){var img=new Image();img.onload=function(){var scale=Math.min(1,1200/Math.max(img.width,img.height));var w=Math.round(img.width*scale),h=Math.round(img.height*scale);var canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;canvas.getContext('2d').drawImage(img,0,0,w,h);res(canvas.toDataURL('image/jpeg',0.88).split(',')[1]);};img.onerror=rej;img.src=e.target.result;};reader.onerror=rej;reader.readAsDataURL(file);});}
+function toArrayBuffer(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsArrayBuffer(file);});}
+
+function fmt(n){return n.toLocaleString('ko-KR');}
+function toKorean(n){
+  const u=['','일','이','삼','사','오','육','칠','팔','구'],p=['','십','백','천'];
+  function chunk(v){let s='';for(let i=3;i>=0;i--){const d=Math.floor(v/Math.pow(10,i))%10;if(d)s+=(i>0&&d===1?'':u[d])+p[i];}return s;}
+  let r='';const eok=Math.floor(n/100000000),man=Math.floor((n%100000000)/10000),rem=n%10000;
+  if(eok)r+=chunk(eok)+'억';if(man)r+=chunk(man)+'만';if(rem)r+=chunk(rem);return r||'영';
+}
+
+async function fillContract(a, info) {
+  const key = tplKey(a.city, a.type);
+  const zip = new PizZip(await toArrayBuffer(state.templates[key]));
+  const xmlPath = 'word/document.xml';
+  let xml = zip.files[xmlPath].asText();
+  const feeNum = Number(String(a.fee).replace(/[^0-9]/g,''));
+  const half = Math.round(feeNum/2);
+  const feeStr=fmt(feeNum), halfStr=fmt(half), feeKor=toKorean(feeNum), halfKor=toKorean(half);
+  const isIndiv = a.type==='dj_indiv', isSeoul = a.city==='서울';
+
+  // 을/소속사
+  if(isIndiv){ xml=xml.replace('>이름<',`>${a.name}<`); }
+  else { xml=xml.replace('>소속사<',`>${info.companyName}<`); }
+
+  // 아티스트명
+  xml=xml.replace("&#x2019;OOO&#x2019;",`&#x2019;${a.name}&#x2018;`);
+  xml=xml.replace('출연 아티스트：OOO',`출연 아티스트：${a.name}`);
+
+  // 출연일정 (서울만)
+  if(isSeoul) xml=xml.replace('출연 일정 : 2026. 7. 2 ()',`출연 일정 : ${a.date}`);
+
+  // 3조 1항 일금 [한글]만원 ( ₩ [숫자]원)
+  xml=xml.replace('>일금 00<',`>일금 ${feeKor}<`,1);
+  let pos=xml.indexOf('>일금 '+feeKor+'<');
+  let p2=xml.indexOf('>0<',pos); xml=xml.slice(0,p2)+'><'+xml.slice(p2+3);
+  let p3=xml.indexOf('>0<',p2+1); xml=xml.slice(0,p3)+'><'+xml.slice(p3+3);
+  xml=xml.replace('> 만<','><',1);
+  xml=xml.replace('>0000<',`>${feeStr}<`,1);
+
+  // 표: 계약금
+  let p=xml.indexOf('>00<'); xml=xml.slice(0,p)+`>${halfStr.slice(0,2)}<`+xml.slice(p+4);
+  p2=xml.indexOf('>0<',p); xml=xml.slice(0,p2)+`>${halfStr[3]}<`+xml.slice(p2+3);
+  p3=xml.indexOf('>00,000원 <',p); xml=xml.slice(0,p3)+`>${halfStr.slice(4)}원 <`+xml.slice(p3+10);
+  xml=xml.replace('>0000<',`>${halfKor}<`,1);
+
+  // 표: 잔금
+  p=xml.indexOf('>00<'); xml=xml.slice(0,p)+`>${halfStr.slice(0,2)}<`+xml.slice(p+4);
+  p2=xml.indexOf('>0<',p); xml=xml.slice(0,p2)+`>${halfStr[3]}<`+xml.slice(p2+3);
+  p3=xml.indexOf('>00,000원 <',p); xml=xml.slice(0,p3)+`>${halfStr.slice(4)}원 <`+xml.slice(p3+10);
+  xml=xml.replace('>0000<',`>${halfKor}<`,1);
+
+  // 표: 총액
+  p=xml.indexOf('>00<'); xml=xml.slice(0,p)+`>${feeStr.slice(0,2)}<`+xml.slice(p+4);
+  p2=xml.indexOf('>0<',p); xml=xml.slice(0,p2)+`>${feeStr[3]}<`+xml.slice(p2+3);
+  p3=xml.indexOf('>00,000원 <',p); xml=xml.slice(0,p3)+`>${feeStr.slice(4)}원 <`+xml.slice(p3+10);
+  xml=xml.replace('(일금 백만원)',`(일금 ${feeKor}원)`);
+
+  // 계좌
+  xml=xml.replace('은행명 : ',`은행명 : ${info.bankName} `,1);
+  xml=xml.replace('예금주:',`예금주: ${info.accountHolder}`,1);
+  xml=xml.replace('계좌번호 :',`계좌번호 : ${info.accountNumber}`,1);
+
+  // 날짜
+  if(isSeoul){
+    const pn=xml.indexOf('년   </w:t>');
+    const pm=xml.indexOf('<w:t>',pn);const pe=xml.indexOf('</w:t>',pm);
+    xml=xml.slice(0,pm+5)+String(today.getMonth()+1)+xml.slice(pe);
+    xml=xml.replace('>월   일<',`>월 ${today.getDate()}일<`,1);
+  } else {
+    if(xml.includes('년   월   일')){ xml=xml.replace('년   월   일',`년 ${today.getMonth()+1}월 ${today.getDate()}일`); }
+    else {
+      const pn=xml.indexOf('년   </w:t>');
+      const pm=xml.indexOf('<w:t>',pn);const pe=xml.indexOf('</w:t>',pm);
+      xml=xml.slice(0,pm+5)+String(today.getMonth()+1)+xml.slice(pe);
+      xml=xml.replace('>월   일<',`>월 ${today.getDate()}일<`,1);
+    }
+  }
+
+  // 을 서명란
+  if(isIndiv){
+    // 개인: 아티스트명, 주민등록번호, 이름
+    xml=xml.replace('>아티스트 : <',`>아티스트 : ${a.name}<`);
+    xml=xml.replace('>아티스트<',`>${a.name}<`);
+    xml=xml.replace('>사업자등록번호: </w:t>',`>주민등록번호: ${info.idNumber||''}</w:t>`,1);
+    const posCeo=xml.lastIndexOf('이름</w:t>');
+    const posSpace=xml.indexOf('> </w:t>',posCeo);
+    if(posSpace!==-1) xml=xml.slice(0,posSpace)+`> ${a.name}</w:t>`+xml.slice(posSpace+8);
+  } else {
+    // 법인: 법인명, 주소, 사업자번호, 대표이사
+    xml=xml.replace('> 주식회사</w:t>',`> ${info.companyName}</w:t>`,1);
+    xml=xml.replace('>서울특별시 </w:t>',`>${info.address}</w:t>`,1);
+    xml=xml.replace('>사업자등록번호: </w:t>',`>사업자등록번호: ${info.bizNumber}</w:t>`,1);
+    const posCeo=xml.lastIndexOf('대표이사</w:t>');
+    const posSpace=xml.indexOf('> </w:t>',posCeo);
+    if(posSpace!==-1) xml=xml.slice(0,posSpace)+`> ${info.ceoName}</w:t>`+xml.slice(posSpace+8);
+  }
+
+  zip.file(xmlPath, xml);
+  const out = zip.generate({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+  const url = URL.createObjectURL(out);
+  const link = document.createElement('a');
+  link.href=url;
+  const suffix = a.type==='artist'?'ARTIST':a.type==='dj_corp'?'DJ_법인':'DJ_개인';
+  link.download=`워터밤_${a.city}_2026_${suffix}_계약서_${a.name}.docx`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+async function generate() {
+  document.getElementById('gen-btn').disabled=true;
+  showStatus('계약서 생성 시작...','info');
+  const pl=document.getElementById('prog-list');
+  pl.style.display='flex';
+  pl.innerHTML=state.artists.map(a=>`<div class="prog-item waiting" id="prog-${a.id}"><div class="dot"></div><span>${a.name} (${a.city} ${typeLabel(a.type)}) — 대기 중</span></div>`).join('');
+  let ok=0;
+  for(const a of state.artists){
+    setProgStatus(a.id,'active',`${a.name} — OCR 분석 중...`);
+    try{
+      const doc1B64=await resizeAndBase64(a.doc1);
+      const doc2B64=await resizeAndBase64(a.doc2);
+      const doc1Mime=a.doc1.type==='application/pdf'?'application/pdf':'image/jpeg';
+      const doc2Mime=a.doc2.type==='application/pdf'?'application/pdf':'image/jpeg';
+      const res=await fetch('/api/ocr',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({doc1Image:doc1B64,doc1Mime,doc2Image:doc2B64,doc2Mime,isIndividual:a.type==='dj_indiv'})});
+      if(!res.ok){const err=await res.json();throw new Error(err.error||'서버 오류 '+res.status);}
+      const info=await res.json();
+      setProgStatus(a.id,'active',`${a.name} — 계약서 생성 중...`);
+      await fillContract(a,info);
+      setProgStatus(a.id,'done',`${a.name} ✓ 완료 — 다운로드됨`);
+      ok++;
+    }catch(err){setProgStatus(a.id,'error',`${a.name} — 오류: ${err.message}`);}
+  }
+  showStatus(ok===state.artists.length?`✓ ${ok}명 계약서 생성 완료! 파일이 다운로드되었습니다.`:`${ok}/${state.artists.length}명 완료. 오류 항목을 확인해주세요.`,ok===state.artists.length?'success':'error');
+  document.getElementById('gen-btn').disabled=false;
+}
+</script>
+</body>
+</html>
