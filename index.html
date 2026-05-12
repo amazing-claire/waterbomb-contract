@@ -285,62 +285,67 @@ async function fillContract(a, info) {
   const feeStr=fmt(feeNum), halfStr=fmt(half), feeKor=toKorean(feeNum), halfKor=toKorean(half);
   const isIndiv = a.type==='dj_indiv', isSeoul = a.city==='서울';
 
-  // 금액 표 행 채우기 (자릿수 무관)
-  function fillTableRow(xml, amount, isTotal) {
-    const aStr=fmt(amount), aKor=toKorean(amount), parts=aStr.split(',');
-    let p=xml.indexOf('>00<');
-    xml=xml.slice(0,p)+'>'+parts[0]+'<'+xml.slice(p+4);
-    let p2=xml.indexOf('>0<',p);
-    xml=xml.slice(0,p2)+'>'+parts[1][0]+'<'+xml.slice(p2+3);
-    const tail = parts.length>=3 ? parts[1].slice(1)+','+parts[2] : parts[1].slice(1)+',000';
-    let p3=xml.indexOf('>00,000원 <',p);
-    xml=xml.slice(0,p3)+'>'+tail+'원 <'+xml.slice(p3+10);
-    if(isTotal){
-      xml=xml.replace('(일금 만원)','(일금 '+aKor+'원)');
-      xml=xml.replace('(일금 백만원)','(일금 '+aKor+'원)');
-    } else {
-      xml=xml.replace('>0000<','>'+aKor+'<',1);
+  // 정규식으로 금액 블록 교체 (자릿수 무관)
+  function fillFeeBlock(xml, fee) {
+    const fStr=fmt(fee), fKor=toKorean(fee), h=Math.round(fee/2), hStr=fmt(h), hKor=toKorean(h);
+
+    // 3조 1항: 일금 XX원 ( ₩ XX원)
+    xml = xml.replace(
+      />일금 00(<\/w:t>[\s\S]*?>)0(<\/w:t>[\s\S]*?>)0(<\/w:t>[\s\S]*?>) 만(<\/w:t>[\s\S]*?>)원 \( ₩(<\/w:t>[\s\S]*?>) (<\/w:t>[\s\S]*?>)0000(<\/w:t>)/,
+      (_, g1,g2,g3,g4,g5,g6,g7) => `>일금 ${fKor}${g1}${g2}${g3}${g4}원 ( ₩${g5} ${g6}${fStr}${g7}`
+    );
+
+    // 표 행 교체 함수
+    function replaceRow(xml, amount, isTotal) {
+      const aStr=fmt(amount), aKor=toKorean(amount), parts=aStr.split(',');
+      const p0=parts[0], p1d=parts[1][0], tail=parts[1].slice(1)+','+(parts[2]||'000');
+      xml = xml.replace(
+        />00(<\/w:t>[\s\S]*?>),(<\/w:t>[\s\S]*?>)0(<\/w:t>[\s\S]*?>)00,000원 (<\/w:t>)/,
+        (_, g1,g2,g3,g4) => `>${p0}${g1},${g2}${p1d}${g3}${tail}원 ${g4}`
+      );
+      if (isTotal) {
+        xml = xml.replace(/\(일금 만원\)|\(일금 백만원\)/, `(일금 ${aKor}원)`);
+      } else {
+        xml = xml.replace(
+          /\(금 (<\/w:t>[\s\S]*?>)0000(<\/w:t>[\s\S]*?>)만원\)/,
+          (_, g1,g2) => `(금 ${g1}${aKor}${g2}만원)`
+        );
+      }
+      return xml;
     }
+    xml = replaceRow(xml, h, false);
+    xml = replaceRow(xml, h, false);
+    xml = replaceRow(xml, fee, true);
     return xml;
   }
 
-  // ① 을/소속사 표기 (도입부)
-  if(isIndiv){ xml=xml.replace('>이름<','>'+info.name+'<',1); }
-  else { xml=xml.replace('>소속사<','>'+info.companyName+'<',1); }
+  // ① 을/소속사 (도입부)
+  if(isIndiv){ xml=xml.replace(/>이름</, '>'+info.name+'<'); }
+  else { xml=xml.replace(/>소속사</, '>'+info.companyName+'<'); }
 
-  // ② 도입부 아티스트명 OOO
-  xml=xml.replace("&#x2019;OOO&#x2019;",'&#x2019;'+a.name+'&#x2018;');
+  // ② 도입부 OOO
+  xml=xml.replace(/&#x2019;OOO&#x2019;/g, '&#x2019;'+a.name+'&#x2018;');
 
-  // ③ 2조 출연 아티스트 OOO
-  xml=xml.replace('출연 아티스트：OOO','출연 아티스트：'+a.name);
+  // ③ 2조 출연 아티스트
+  xml=xml.replace('출연 아티스트：OOO', '출연 아티스트：'+a.name);
 
-  // ④ 출연일정 (서울만)
-  if(isSeoul) xml=xml.replace('출연 일정 : 2026. 7. 2 ()','출연 일정 : '+a.date);
+  // ④ 출연일정
+  if(isSeoul) xml=xml.replace('출연 일정 : 2026. 7. 2 ()', '출연 일정 : '+a.date);
 
-  // ⑤ 3조 1항: 일금 [한글]원 ( ₩ [숫자]원)
-  xml=xml.replace('>일금 00<','>일금 '+feeKor+'<',1);
-  let pos=xml.indexOf('>일금 '+feeKor+'<');
-  let p2=xml.indexOf('>0<',pos); xml=xml.slice(0,p2)+'><'+xml.slice(p2+3);
-  let p3=xml.indexOf('>0<',p2+1); xml=xml.slice(0,p3)+'><'+xml.slice(p3+3);
-  xml=xml.replace('> 만<','><',1);
-  xml=xml.replace('>0000<','>'+feeStr+'<',1);
-
-  // ⑥⑦⑧ 표: 계약금 / 잔금 / 총액
-  xml=fillTableRow(xml,half,false);
-  xml=fillTableRow(xml,half,false);
-  xml=fillTableRow(xml,feeNum,true);
+  // ⑤⑥⑦⑧ 금액 전체
+  xml = fillFeeBlock(xml, feeNum);
 
   // ⑨ 계좌정보
-  xml=xml.replace('은행명 : ','은행명 : '+(info.bankName||'')+'  ',1);
-  xml=xml.replace('예금주:','예금주: '+(info.accountHolder||''),1);
-  xml=xml.replace('계좌번호 :','계좌번호 : '+(info.accountNumber||''),1);
+  xml=xml.replace('은행명 : ', '은행명 : '+(info.bankName||'')+'  ', 1);
+  xml=xml.replace('예금주:', '예금주: '+(info.accountHolder||''));
+  xml=xml.replace('계좌번호 :', '계좌번호 : '+(info.accountNumber||''));
 
   // ⑩ 날짜
   if(isSeoul){
     const pn=xml.indexOf('년   </w:t>');
     const pm=xml.indexOf('<w:t>',pn); const pe=xml.indexOf('</w:t>',pm);
     xml=xml.slice(0,pm+5)+String(today.getMonth()+1)+xml.slice(pe);
-    xml=xml.replace('>월   일<','>월 '+today.getDate()+'일<',1);
+    xml=xml.replace('>월   일<', '>월 '+today.getDate()+'일<');
   } else {
     if(xml.includes('년   월   일')){
       xml=xml.replace('년   월   일','년 '+(today.getMonth()+1)+'월 '+today.getDate()+'일');
@@ -348,29 +353,31 @@ async function fillContract(a, info) {
       const pn=xml.indexOf('년   </w:t>');
       const pm=xml.indexOf('<w:t>',pn); const pe=xml.indexOf('</w:t>',pm);
       xml=xml.slice(0,pm+5)+String(today.getMonth()+1)+xml.slice(pe);
-      xml=xml.replace('>월   일<','>월 '+today.getDate()+'일<',1);
+      xml=xml.replace('>월   일<','>월 '+today.getDate()+'일<');
     }
   }
 
   // ⑪ 을 서명란
   if(isIndiv){
-    // 개인: 아티스트명, 주민등록번호, 실명(신분증)
     xml=xml.replace('>아티스트 : <','>아티스트 : '+a.name+'<');
-    xml=xml.replace('>아티스트<','>'+a.name+'<');
-    xml=xml.replace('>사업자등록번호: </w:t>','>주민등록번호: '+(info.idNumber||'')+'</w:t>',1);
+    xml=xml.replace(/>아티스트</g,'>'+a.name+'<');
+    xml=xml.replace(/>사업자등록번호: <\/w:t>/,'>주민등록번호: '+(info.idNumber||'')+'</w:t>');
     const posNm=xml.lastIndexOf('이름</w:t>');
     const posSp=xml.indexOf('> </w:t>',posNm);
     if(posSp!==-1) xml=xml.slice(0,posSp)+'> '+(info.name||a.name)+'</w:t>'+xml.slice(posSp+8);
   } else {
-    // 법인: 법인명, 주소, 사업자번호, 대표이사
+    // 법인명: 마지막 '법인명' 뒤 공백 run 교체
     const posBiz=xml.lastIndexOf('법인명</w:t>');
     const posColon=xml.indexOf('</w:t>',posBiz+6);
     const posCorpSp=xml.indexOf('> </w:t>',posColon);
     if(posCorpSp!==-1) xml=xml.slice(0,posCorpSp)+'> '+info.companyName+'</w:t>'+xml.slice(posCorpSp+8);
-    const posAddr=xml.lastIndexOf('주소</w:t>',xml.lastIndexOf('대표이사</w:t>'));
+    // 주소: 마지막 '주소' 뒤 ': ' run 교체
+    const posAddr=xml.lastIndexOf('주소</w:t>');
     const posAddrColon=xml.indexOf('>: </w:t>',posAddr);
     if(posAddrColon!==-1) xml=xml.slice(0,posAddrColon)+'>: '+info.address+'</w:t>'+xml.slice(posAddrColon+9);
-    xml=xml.replace('>사업자등록번호: </w:t>','>사업자등록번호: '+info.bizNumber+'</w:t>',1);
+    // 사업자등록번호
+    xml=xml.replace(/>사업자등록번호: <\/w:t>/,'>사업자등록번호: '+info.bizNumber+'</w:t>');
+    // 대표이사
     const posCeo=xml.lastIndexOf('대표이사</w:t>');
     const posCeoSp=xml.indexOf('> </w:t>',posCeo);
     if(posCeoSp!==-1) xml=xml.slice(0,posCeoSp)+'> '+info.ceoName+'</w:t>'+xml.slice(posCeoSp+8);
