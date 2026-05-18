@@ -285,110 +285,115 @@ async function fillContract(a, info) {
   const feeStr=fmt(feeNum), halfStr=fmt(half), feeKor=toKorean(feeNum), halfKor=toKorean(half);
   const isIndiv = a.type==='dj_indiv', isSeoul = a.city==='서울';
 
-  // 정규식으로 금액 블록 교체 (자릿수 무관)
   function fillFeeBlock(xml, fee) {
     const fStr=fmt(fee), fKor=toKorean(fee), h=Math.round(fee/2), hStr=fmt(h), hKor=toKorean(h);
 
-    // 3조 1항: 일금 XX원 ( ₩ XX원)
-    xml = xml.replace(
-      />일금 00(<\/w:t>[\s\S]*?>)0(<\/w:t>[\s\S]*?>)0(<\/w:t>[\s\S]*?>) 만(<\/w:t>[\s\S]*?>)원 \( ₩(<\/w:t>[\s\S]*?>) (<\/w:t>[\s\S]*?>)0000(<\/w:t>)/,
-      (_, g1,g2,g3,g4,g5,g6,g7) => `>일금 ${fKor}${g1}${g2}${g3}${g4}원 ( ₩${g5} ${g6}${fStr}${g7}`
-    );
+    // 3조 1항: 일금 [한글]원 ( ₩ [숫자]원)
+    xml = xml.split('>일금 00<').join('>일금 FEEKOR_PLACEHOLDER<');
+    xml = xml.split('>일금 FEEKOR_PLACEHOLDER<').join('>일금 ' + fKor + '<');
+    var pos = xml.indexOf('>일금 ' + fKor + '<');
+    var p1 = xml.indexOf('>0<', pos); xml = xml.slice(0,p1) + '><' + xml.slice(p1+3);
+    var p2 = xml.indexOf('>0<', p1+1); xml = xml.slice(0,p2) + '><' + xml.slice(p2+3);
+    xml = xml.split('> 만<').join('><');
+    xml = xml.replace('>0000<', '>' + fStr + '<');
 
-    // 표 행 교체 함수
-    function replaceRow(xml, amount, isTotal) {
-      const aStr=fmt(amount), aKor=toKorean(amount), parts=aStr.split(',');
-      const p0=parts[0], p1d=parts[1][0], tail=parts[1].slice(1)+','+(parts[2]||'000');
-      xml = xml.replace(
-        />00(<\/w:t>[\s\S]*?>),(<\/w:t>[\s\S]*?>)0(<\/w:t>[\s\S]*?>)00,000원 (<\/w:t>)/,
-        (_, g1,g2,g3,g4) => `>${p0}${g1},${g2}${p1d}${g3}${tail}원 ${g4}`
-      );
-      if (isTotal) {
-        xml = xml.replace(/\(일금 만원\)|\(일금 백만원\)/, `(일금 ${aKor}원)`);
-      } else {
-        xml = xml.replace(
-          /\(금 (<\/w:t>[\s\S]*?>)0000(<\/w:t>[\s\S]*?>)만원\)/,
-          (_, g1,g2) => `(금 ${g1}${aKor}${g2}만원)`
-        );
-      }
+    // 표 행 채우기
+    function fillRow(xml, amount) {
+      var aStr=fmt(amount), aKor=toKorean(amount), parts=aStr.split(',');
+      var p0=parts[0], p1d=parts[1][0], tail=parts[1].slice(1)+','+(parts[2]||'000');
+      var i=xml.indexOf('>00<'); xml=xml.slice(0,i)+'>'+p0+'<'+xml.slice(i+4);
+      var i2=xml.indexOf('>0<',i); xml=xml.slice(0,i2)+'>'+p1d+'<'+xml.slice(i2+3);
+      var i3=xml.indexOf('>00,000원 <',i); xml=xml.slice(0,i3)+'>'+tail+'원 <'+xml.slice(i3+10);
+      xml=xml.replace('>0000<', '>'+aKor+'<');
       return xml;
     }
-    xml = replaceRow(xml, h, false);
-    xml = replaceRow(xml, h, false);
-    xml = replaceRow(xml, fee, true);
+    xml = fillRow(xml, h);  // 계약금
+    xml = fillRow(xml, h);  // 잔금
+
+    // 총액
+    var parts=fStr.split(','), p0=parts[0], p1d=parts[1][0], tail=parts[1].slice(1)+','+(parts[2]||'000');
+    var i=xml.indexOf('>00<'); xml=xml.slice(0,i)+'>'+p0+'<'+xml.slice(i+4);
+    var i2=xml.indexOf('>0<',i); xml=xml.slice(0,i2)+'>'+p1d+'<'+xml.slice(i2+3);
+    var i3=xml.indexOf('>00,000원 <',i); xml=xml.slice(0,i3)+'>'+tail+'원 <'+xml.slice(i3+10);
+    xml=xml.split('(일금 백만원)').join('(일금 '+fKor+'원)');
+    xml=xml.split('(일금 만원)').join('(일금 '+fKor+'원)');
     return xml;
   }
 
-  // ① 을/소속사 (도입부)
-  if(isIndiv){ xml=xml.replace(/>이름</, '>'+info.name+'<'); }
-  else { xml=xml.replace(/>소속사</, '>'+info.companyName+'<'); }
+  // ① 소속사/이름 (도입부)
+  if(isIndiv){ xml=xml.split('>이름<').join('>'+info.name+'<'); }
+  else { xml=xml.split('>소속사<').join('>'+info.companyName+'<'); }
 
-  // ② 도입부 OOO
-  xml=xml.replace(/&#x2019;OOO&#x2019;/g, '&#x2019;'+a.name+'&#x2018;');
+  // ② 도입부 OOO — XML 엔티티 형태로 정확히 교체
+  xml=xml.split('&#x2019;OOO&#x2018;').join('&#x2019;'+a.name+'&#x2018;');
 
-  // ③ 2조 출연 아티스트
-  xml=xml.replace('출연 아티스트：OOO', '출연 아티스트：'+a.name);
+  // ③ 2조 출연 아티스트 OOO
+  xml=xml.split('출연 아티스트：OOO').join('출연 아티스트：'+a.name);
 
-  // ④ 출연일정
-  if(isSeoul) xml=xml.replace('출연 일정 : 2026. 7. 2 ()', '출연 일정 : '+a.date);
+  // ④ 출연일정 — 정확한 문자열로 교체
+  if(isSeoul) xml=xml.split('출연 일정 : 2026. 7. 2 ()').join('출연 일정 : '+a.date);
 
-  // ⑤⑥⑦⑧ 금액 전체
+  // ⑤⑥⑦⑧ 금액
   xml = fillFeeBlock(xml, feeNum);
 
   // ⑨ 계좌정보
-  xml=xml.replace('은행명 : ', '은행명 : '+(info.bankName||'')+'  ', 1);
-  xml=xml.replace('예금주:', '예금주: '+(info.accountHolder||''));
-  xml=xml.replace('계좌번호 :', '계좌번호 : '+(info.accountNumber||''));
+  xml=xml.split('은행명 : ').join('은행명 : '+(info.bankName||'')+' ');
+  // 예금주: 다음 run의 ' ' 교체
+  var posH=xml.lastIndexOf('>예금주:<');
+  var posHEnd=xml.indexOf('</w:t>',posH);
+  xml=xml.slice(0,posH)+'>예금주: '+(info.accountHolder||'')+'</w:t>'+xml.slice(posHEnd+6);
+  // 빈 ' ' run 제거
+  xml=xml.split('계좌번호 :').join('계좌번호 : '+(info.accountNumber||''));
 
   // ⑩ 날짜
   if(isSeoul){
-    const pn=xml.indexOf('년   </w:t>');
-    const pm=xml.indexOf('<w:t>',pn); const pe=xml.indexOf('</w:t>',pm);
+    var pn=xml.indexOf('년   </w:t>');
+    var pm=xml.indexOf('<w:t>',pn); var pe=xml.indexOf('</w:t>',pm);
     xml=xml.slice(0,pm+5)+String(today.getMonth()+1)+xml.slice(pe);
-    xml=xml.replace('>월   일<', '>월 '+today.getDate()+'일<');
+    xml=xml.split('>월   일<').join('>월 '+today.getDate()+'일<');
   } else {
-    if(xml.includes('년   월   일')){
-      xml=xml.replace('년   월   일','년 '+(today.getMonth()+1)+'월 '+today.getDate()+'일');
+    if(xml.indexOf('년   월   일')!==-1){
+      xml=xml.split('년   월   일').join('년 '+(today.getMonth()+1)+'월 '+today.getDate()+'일');
     } else {
-      const pn=xml.indexOf('년   </w:t>');
-      const pm=xml.indexOf('<w:t>',pn); const pe=xml.indexOf('</w:t>',pm);
+      var pn=xml.indexOf('년   </w:t>');
+      var pm=xml.indexOf('<w:t>',pn); var pe=xml.indexOf('</w:t>',pm);
       xml=xml.slice(0,pm+5)+String(today.getMonth()+1)+xml.slice(pe);
-      xml=xml.replace('>월   일<','>월 '+today.getDate()+'일<');
+      xml=xml.split('>월   일<').join('>월 '+today.getDate()+'일<');
     }
   }
 
   // ⑪ 을 서명란
   if(isIndiv){
-    xml=xml.replace('>아티스트 : <','>아티스트 : '+a.name+'<');
-    xml=xml.replace(/>아티스트</g,'>'+a.name+'<');
-    xml=xml.replace(/>사업자등록번호: <\/w:t>/,'>주민등록번호: '+(info.idNumber||'')+'</w:t>');
-    const posNm=xml.lastIndexOf('이름</w:t>');
-    const posSp=xml.indexOf('> </w:t>',posNm);
+    xml=xml.split('>아티스트 : <').join('>아티스트 : '+a.name+'<');
+    xml=xml.split('>아티스트<').join('>'+a.name+'<');
+    xml=xml.split('>사업자등록번호: </w:t>').join('>주민등록번호: '+(info.idNumber||'')+'</w:t>');
+    var posNm=xml.lastIndexOf('이름</w:t>');
+    var posSp=xml.indexOf('> </w:t>',posNm);
     if(posSp!==-1) xml=xml.slice(0,posSp)+'> '+(info.name||a.name)+'</w:t>'+xml.slice(posSp+8);
   } else {
-    // 법인명: 마지막 '법인명' 뒤 공백 run 교체
-    const posBiz=xml.lastIndexOf('법인명</w:t>');
-    const posColon=xml.indexOf('</w:t>',posBiz+6);
-    const posCorpSp=xml.indexOf('> </w:t>',posColon);
-    if(posCorpSp!==-1) xml=xml.slice(0,posCorpSp)+'> '+info.companyName+'</w:t>'+xml.slice(posCorpSp+8);
-    // 주소: 마지막 '주소' 뒤 ': ' run 교체
-    const posAddr=xml.lastIndexOf('주소</w:t>');
-    const posAddrColon=xml.indexOf('>: </w:t>',posAddr);
-    if(posAddrColon!==-1) xml=xml.slice(0,posAddrColon)+'>: '+info.address+'</w:t>'+xml.slice(posAddrColon+9);
+    // 법인명 뒤 공백 run
+    var posBiz=xml.lastIndexOf('법인명</w:t>');
+    var posColon=xml.indexOf('</w:t>',posBiz+6);
+    var posCorpSp=xml.indexOf('> </w:t>',posColon);
+    if(posCorpSp!==-1) xml=xml.slice(0,posCorpSp)+'> '+(info.companyName||'')+'</w:t>'+xml.slice(posCorpSp+8);
+    // 주소 뒤 ': ' run
+    var posAddr=xml.lastIndexOf('주소</w:t>');
+    var posAddrColon=xml.indexOf('>: </w:t>',posAddr);
+    if(posAddrColon!==-1) xml=xml.slice(0,posAddrColon)+'>: '+(info.address||'')+'</w:t>'+xml.slice(posAddrColon+9);
     // 사업자등록번호
-    xml=xml.replace(/>사업자등록번호: <\/w:t>/,'>사업자등록번호: '+info.bizNumber+'</w:t>');
+    xml=xml.split('>사업자등록번호: </w:t>').join('>사업자등록번호: '+(info.bizNumber||'')+'</w:t>');
     // 대표이사
-    const posCeo=xml.lastIndexOf('대표이사</w:t>');
-    const posCeoSp=xml.indexOf('> </w:t>',posCeo);
-    if(posCeoSp!==-1) xml=xml.slice(0,posCeoSp)+'> '+info.ceoName+'</w:t>'+xml.slice(posCeoSp+8);
+    var posCeo=xml.lastIndexOf('대표이사</w:t>');
+    var posCeoSp=xml.indexOf('> </w:t>',posCeo);
+    if(posCeoSp!==-1) xml=xml.slice(0,posCeoSp)+'> '+(info.ceoName||'')+'</w:t>'+xml.slice(posCeoSp+8);
   }
 
   zip.file(xmlPath,xml);
-  const out=zip.generate({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
-  const url=URL.createObjectURL(out);
-  const link=document.createElement('a');
+  var out=zip.generate({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+  var url=URL.createObjectURL(out);
+  var link=document.createElement('a');
   link.href=url;
-  const suffix=a.type==='artist'?'ARTIST':a.type==='dj_corp'?'DJ_법인':'DJ_개인';
+  var suffix=a.type==='artist'?'ARTIST':a.type==='dj_corp'?'DJ_법인':'DJ_개인';
   link.download='워터밤_'+a.city+'_2026_'+suffix+'_계약서_'+a.name+'.docx';
   link.click();
   URL.revokeObjectURL(url);
